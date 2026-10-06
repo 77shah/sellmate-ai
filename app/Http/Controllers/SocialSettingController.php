@@ -22,11 +22,13 @@ class SocialSettingController extends Controller
         $request->validate([
             'social_name' => 'required|string|max:255',
             'social_link' => 'required|url|max:500',
-            'social_image' => 'nullable|image|mimes:jpg,jpeg,png,gif|max:2048',
+            'social_image' => 'nullable|image|mimes:jpg,jpeg,png,gif',
         ]);
 
         $data = $request->only(['social_name', 'social_link']);
-        $data['status'] = 'active';
+        
+        // 🔥 FIX: status integer (1 = active, 0 = inactive)
+        $data['status'] = 1;
 
         if ($request->hasFile('social_image')) {
             $image = $request->file('social_image');
@@ -63,7 +65,6 @@ class SocialSettingController extends Controller
         $data = $request->only(['social_name', 'social_link']);
 
         if ($request->hasFile('social_image')) {
-            // Delete old image if exists
             if ($social->social_image && file_exists(public_path('admin_uploads/' . $social->social_image))) {
                 unlink(public_path('admin_uploads/' . $social->social_image));
             }
@@ -82,7 +83,9 @@ class SocialSettingController extends Controller
     public function toggleStatus($id)
     {
         $social = SocialLink::findOrFail($id);
-        $social->status = $social->status == 'active' ? 'inactive' : 'active';
+        
+        // 🔥 FIX: Integer comparison
+        $social->status = ($social->status == 1) ? 0 : 1;
         $social->save();
 
         return back()->with('success', 'Status updated successfully!');
