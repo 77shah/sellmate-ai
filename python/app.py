@@ -67,22 +67,34 @@ async def health():
 
 
 def is_greeting(message: str) -> bool:
-    """🔥 Check karo message greeting hai ya nahi"""
-    msg = message.lower().strip()
+    """
+    🔥 Check karo message pure greeting hai ya nahi
+    Ye function STRICT hai — 'mujhe baal katwana hai' jaisa query nahi pkdega
+    """
+    msg = message.lower().strip().rstrip('!.').rstrip()
     
-    greetings = [
-        'hi', 'hii', 'hiii', 'hello', 'helo', 'hey', 'heyy',
-        'namaste', 'namaskar', 'salam', 'salaam', 'assalam',
+    # Exact greetings (sirf yahi match honge)
+    exact_greetings = {
+        'hi', 'hii', 'hiii', 'hiiii', 'hlo', 'hlw',
+        'hello', 'helo', 'helloo',
+        'hey', 'heyy', 'heyyy',
+        'namaste', 'namaskar', 'namste',
+        'salam', 'salaam', 'assalam', 'assalamualaikum', 'asalam',
         'good morning', 'good evening', 'good afternoon',
-        'gm', 'ge', 'hlo', 'hlw'
-    ]
+        'gm', 'ge', 'gn',
+        'start', 'hii there', 'hello there', 'hi there',
+    }
     
-    if msg in greetings:
+    # Exact match only
+    if msg in exact_greetings:
         return True
     
-    if len(msg) < 15:
-        for g in greetings:
-            if g in msg:
+    # 1-2 word message (short greeting)
+    words = msg.split()
+    if len(words) <= 2 and len(msg) < 15:
+        # Sab words greeting me hone chahiye
+        for w in words:
+            if w in exact_greetings:
                 return True
     
     return False
@@ -98,7 +110,7 @@ def get_greeting_reply(message: str) -> str:
     if re.search(r'[\u0600-\u06FF]', message):
         return "السلام علیکم! 🙏 کیسے مدد کر سکتی ہوں؟ 😊"
     
-    # English
+    # English (pure A-Z)
     if re.match(r'^[a-zA-Z\s,\.!?]+$', message):
         return "Hello! 🙏 How can I help you today? 😊"
     
@@ -117,7 +129,7 @@ async def chat(request: MessageRequest):
         print(f"   History: {len(request.conversation_history or [])} messages")
         print(f"{'='*60}")
         
-        # 🔥 STEP 0: GREETING CHECK
+        # 🔥 STEP 0: GREETING CHECK (strict)
         if is_greeting(request.message):
             reply = get_greeting_reply(request.message)
             print(f"👋 Greeting detected — instant reply")
@@ -128,7 +140,7 @@ async def chat(request: MessageRequest):
                 should_escalate=False
             )
         
-        # 🔥 STEP 1: SMART SEARCH
+        # 🔥 STEP 1: SMART SEARCH — top 20 relevant chunks
         print(f"🔍 Searching relevant chunks...")
         search_results = rag_engine.search(
             tenant_id=request.tenant_id,
@@ -151,11 +163,11 @@ async def chat(request: MessageRequest):
         if not context:
             print("⚠️ NO CONTEXT — using fallback")
             return AIResponse(
-                reply="Namaste! 🙏 Kaise madad kar sakti hun? 😊",
+                reply="Namaste! 🙏 Main aapki query team ko forward kar rahi hun. Wo aapko jaldi contact karenge. 😊",
                 should_escalate=True
             )
         
-        # 🔥 STEP 3: LLM Call
+        # 🔥 STEP 3: LLM Call with conversation history
         print("📤 Sending to LLM...")
         
         history = None
