@@ -6,15 +6,10 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
-use Illuminate\Support\Str;
 
 class User extends Authenticatable
 {
     use HasFactory, Notifiable;
-
-    // 🔥 ID auto-increment hai
-    // public $incrementing = false;  // ← HATAO
-    // protected $keyType = 'string'; // ← HATAO
 
     protected $fillable = [
         'name',
@@ -25,6 +20,7 @@ class User extends Authenticatable
         'status',
         'type',
         'tenant_id',
+        'uuid',
         'last_login_at',
         'profile_image',
         'current_plan_id',
@@ -47,17 +43,13 @@ class User extends Authenticatable
         ];
     }
 
-    // 🔥 Boot method - UUID generate mat karo
-    protected static function boot()
-    {
-        parent::boot();
-        // UUID column nahi hai, isliye kuch mat karo
-    }
+    // 🔥 Kuch bhi nahi karo boot me — uuid optional hai
+    // Database me nullable hai, so chill
 
     // ===== RELATIONSHIPS =====
     public function customers()
     {
-        return $this->hasMany(Customer::class, 'tenant_id', 'id');
+        return $this->hasMany(Customer::class, 'tenant_id', 'tenant_id');
     }
 
     public function assignedCustomers()
@@ -67,7 +59,7 @@ class User extends Authenticatable
 
     public function orders()
     {
-        return $this->hasMany(Order::class, 'tenant_id', 'id');
+        return $this->hasMany(Order::class, 'tenant_id', 'tenant_id');
     }
 
     public function assignedOrders()
@@ -77,7 +69,7 @@ class User extends Authenticatable
 
     public function conversations()
     {
-        return $this->hasMany(Conversation::class, 'tenant_id', 'id');
+        return $this->hasMany(Conversation::class, 'tenant_id', 'tenant_id');
     }
 
     public function assignedConversations()
@@ -87,22 +79,22 @@ class User extends Authenticatable
 
     public function payments()
     {
-        return $this->hasMany(Payment::class, 'tenant_id', 'id');
+        return $this->hasMany(Payment::class, 'tenant_id', 'tenant_id');
     }
 
     public function subscriptions()
     {
-        return $this->hasMany(Subscription::class, 'tenant_id', 'id');
+        return $this->hasMany(Subscription::class, 'tenant_id', 'tenant_id');
     }
 
     public function businesses()
     {
-        return $this->hasMany(Business::class, 'tenant_id', 'id');
+        return $this->hasMany(Business::class, 'tenant_id', 'tenant_id');
     }
 
     public function products()
     {
-        return $this->hasMany(Product::class, 'tenant_id', 'id');
+        return $this->hasMany(Product::class, 'tenant_id', 'tenant_id');
     }
 
     public function currentPlan()
@@ -110,62 +102,27 @@ class User extends Authenticatable
         return $this->belongsTo(Plan::class, 'current_plan_id');
     }
 
-    // ===== ROLE CHECK HELPER METHODS =====
-    public function isAdmin()
-    {
-        return $this->type === 'Admin';
-    }
-
-    public function isOwner()
-    {
-        return $this->type === 'Owner';
-    }
-
-    public function isStaff()
-    {
-        return in_array($this->type, ['Staff', 'SalesAgent']);
-    }
-
-    public function isSuperAdmin()
-    {
-        return $this->type === 'SuperAdmin';
-    }
+    // ===== ROLE CHECK =====
+    public function isAdmin() { return $this->type === 'Admin'; }
+    public function isOwner() { return $this->type === 'Owner'; }
+    public function isStaff() { return in_array($this->type, ['Staff', 'SalesAgent']); }
+    public function isSuperAdmin() { return $this->type === 'SuperAdmin'; }
 
     // ===== MENU ACCESS =====
     public function hasMenuAccess($menu)
     {
-        $roleMenus = $this->getRoleMenus();
-        return in_array($menu, $roleMenus);
+        return in_array($menu, $this->getRoleMenus());
     }
 
     public function getRoleMenus()
     {
-        switch($this->type) {
-            case 'SuperAdmin':
-                return [
-                    'dashboard', 'businesses', 'subscriptions', 'ai-usage',
-                    'cloud-resources', 'billing', 'logs', 'api-gateway',
-                    'system-health', 'deployments', 'feature-flags', 'security'
-                ];
-            case 'Admin':
-                return [
-                    'dashboard', 'location', 'categories', 'settings'
-                ];
-            case 'Owner':
-                return [
-                    'dashboard', 'inbox', 'crm', 'orders', 'payments',
-                    'ai-settings', 'knowledge', 'workflows', 'analytics'
-                ];
-            case 'Staff':
-                return [
-                    'dashboard', 'inbox', 'orders'
-                ];
-            case 'SalesAgent':
-                return [
-                    'dashboard', 'inbox', 'crm'
-                ];
-            default:
-                return ['dashboard'];
-        }
+        return match($this->type) {
+            'SuperAdmin' => ['dashboard', 'businesses', 'subscriptions', 'ai-usage', 'cloud-resources', 'billing', 'logs', 'api-gateway', 'system-health', 'deployments', 'feature-flags', 'security'],
+            'Admin' => ['dashboard', 'location', 'categories', 'settings'],
+            'Owner' => ['dashboard', 'inbox', 'crm', 'orders', 'payments', 'ai-settings', 'knowledge', 'workflows', 'analytics'],
+            'Staff' => ['dashboard', 'inbox', 'orders'],
+            'SalesAgent' => ['dashboard', 'inbox', 'crm'],
+            default => ['dashboard'],
+        };
     }
 }
