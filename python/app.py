@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from typing import Optional, List
 import uvicorn
 import os
+import re
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -65,6 +66,46 @@ async def health():
     return {"status": "healthy"}
 
 
+def is_greeting(message: str) -> bool:
+    """🔥 Check karo message greeting hai ya nahi"""
+    msg = message.lower().strip()
+    
+    greetings = [
+        'hi', 'hii', 'hiii', 'hello', 'helo', 'hey', 'heyy',
+        'namaste', 'namaskar', 'salam', 'salaam', 'assalam',
+        'good morning', 'good evening', 'good afternoon',
+        'gm', 'ge', 'hlo', 'hlw'
+    ]
+    
+    if msg in greetings:
+        return True
+    
+    if len(msg) < 15:
+        for g in greetings:
+            if g in msg:
+                return True
+    
+    return False
+
+
+def get_greeting_reply(message: str) -> str:
+    """🔥 Language detect karke generic greeting reply do"""
+    # Hindi (Devanagari)
+    if re.search(r'[\u0900-\u097F]', message):
+        return "नमस्ते! 🙏 कैसे मदद कर सकती हूँ? 😊"
+    
+    # Urdu (Arabic script)
+    if re.search(r'[\u0600-\u06FF]', message):
+        return "السلام علیکم! 🙏 کیسے مدد کر سکتی ہوں؟ 😊"
+    
+    # English
+    if re.match(r'^[a-zA-Z\s,\.!?]+$', message):
+        return "Hello! 🙏 How can I help you today? 😊"
+    
+    # Hinglish (default)
+    return "Namaste! 🙏 Kaise madad kar sakti hun? 😊"
+
+
 @app.post("/api/ai/chat")
 async def chat(request: MessageRequest):
     """Main chat endpoint — Smart search + conversation history"""
@@ -76,7 +117,18 @@ async def chat(request: MessageRequest):
         print(f"   History: {len(request.conversation_history or [])} messages")
         print(f"{'='*60}")
         
-        # 🔥 STEP 1: SMART SEARCH — top 20 relevant chunks
+        # 🔥 STEP 0: GREETING CHECK
+        if is_greeting(request.message):
+            reply = get_greeting_reply(request.message)
+            print(f"👋 Greeting detected — instant reply")
+            return AIResponse(
+                reply=reply,
+                intent="greeting",
+                confidence=1.0,
+                should_escalate=False
+            )
+        
+        # 🔥 STEP 1: SMART SEARCH
         print(f"🔍 Searching relevant chunks...")
         search_results = rag_engine.search(
             tenant_id=request.tenant_id,
@@ -95,16 +147,17 @@ async def chat(request: MessageRequest):
             if len(context) > 12000:
                 context = context[:12000]
         
+        # 🔥 STEP 2: Context empty check
         if not context:
+            print("⚠️ NO CONTEXT — using fallback")
             return AIResponse(
-                reply="Ye information mere paas abhi nahi hai. Main aapki query team ko forward kar rahi hun — wo aapko jaldi contact karenge. 😊",
+                reply="Namaste! 🙏 Kaise madad kar sakti hun? 😊",
                 should_escalate=True
             )
         
-        # 🔥 STEP 2: LLM Call with conversation history
+        # 🔥 STEP 3: LLM Call
         print("📤 Sending to LLM...")
         
-        # Convert history to list of dicts
         history = None
         if request.conversation_history:
             history = [
@@ -151,7 +204,7 @@ async def chat(request: MessageRequest):
         traceback.print_exc()
         
         return AIResponse(
-            reply="Ye information mere paas abhi nahi hai. Main aapki query team ko forward kar rahi hun — wo aapko jaldi contact karenge. 😊",
+            reply="Namaste! 🙏 Thodi technical issue hai. Aap thodi der me dobara message karein. 😊",
             should_escalate=True
         )
 
